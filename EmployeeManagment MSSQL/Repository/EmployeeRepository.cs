@@ -1,0 +1,102 @@
+﻿using EmployeeManagment.Dtos;
+using EmployeeManagment.Models;
+using EmployeeManagment_MSSQL.Data;
+using EmployeeManagment_MSSQL.Interfaces;
+using Microsoft.EntityFrameworkCore;
+
+namespace EmployeeManagment.Repository
+{
+    public class EmployeeRepository : IEmployeeRepository
+    {
+        private readonly ApplicationDbContext context;
+
+        public EmployeeRepository(ApplicationDbContext context)
+        {
+            this.context = context;
+        }
+
+        public async Task<Employee> CreateEmployee(Employee employee)
+        {
+            context.Employees.Add( employee );
+            await context.SaveChangesAsync();
+            return employee;
+        }
+
+        public async Task<Employee> GetById(string id)
+        {
+            return await context.Employees.Include(e => e.Address)
+                .Include(e => e.Employments)
+                .FirstOrDefaultAsync(e => e.Id == id);
+        }
+
+        public async Task<IEnumerable<Employee>> GetAll()
+        {
+            return await context.Employees.Where(u =>  u.IsWorking == true).Include(e => e.Address)
+                .Include(e => e.Employments).OrderBy(e => e.Id).ToListAsync();
+        }
+
+        public async Task<Employee> Update(Employee employee)
+        {
+           context.Employees.Update( employee );
+           await context.SaveChangesAsync();
+           return employee;
+        }
+
+        public async Task<bool> SoftDelete(string id)
+        {
+            var response = await GetById(id);
+            response.IsWorking = false;
+            await context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<List<EmployeeSummaryDto>> GetAllBasics()
+        {
+            return await context.Employees.Where(u => u.IsWorking==true).Select(e => new EmployeeSummaryDto()
+            {
+                Id = e.Id,
+                Name = e.Name,
+                Email = e.Email,
+                Designation = e.Designation,
+                Department = e.Department,
+                ContactNumber = e.ContactNumber,
+            }).ToListAsync();
+        }
+
+        public async Task<(List<EmployeeSummaryDto>, int totalCount)> GetPaged(int pageNumber, int pageSize, string sortBy, bool ascending)
+        {
+            var fields = new HashSet<string> { "name", "department", "designation", "createdAt" };
+            if (!fields.Contains(sortBy)) sortBy = "name";
+
+            IQueryable<Employee> query = context.Employees;
+
+            query = sortBy.ToLower() switch
+            {
+                "department" => ascending
+                    ? query.OrderBy(e => e.Department)
+                    : query.OrderByDescending(e => e.Department),
+                "designation" => ascending
+                    ? query.OrderBy(e => e.Designation)
+                    : query.OrderByDescending(e => e.Designation),
+                "createdAt" => ascending ? query.OrderBy(e => e.CreatedAt) : query.OrderByDescending(e => e.CreatedAt),
+                _ => ascending ? query.OrderBy(e => e.Name) : query.OrderByDescending(e => e.Name),
+            };
+
+            int totalCount = await query.CountAsync();
+
+            var emp = await query.Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(e => new EmployeeSummaryDto()
+                {
+                    Id = e.Id,
+                    Name = e.Name,
+                    Email = e.Email,
+                    Department = e.Department,
+                    Designation = e.Designation,
+                    ContactNumber = e.ContactNumber,
+                }).ToListAsync();
+            return (emp, totalCount);
+        }
+    }
+}
+
