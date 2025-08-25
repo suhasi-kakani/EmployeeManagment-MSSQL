@@ -1,9 +1,10 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
+using EmployeeManagment.Models;
 using EmployeeManagment_MSSQL.Data;
+using EmployeeManagment_MSSQL.Exceptions;
 using EmployeeManagment_MSSQL.Interfaces;
 using Microsoft.EntityFrameworkCore;
-using User = EmployeeManagment.Models.User;
 
 namespace EmployeeManagment.Repository
 {
@@ -16,52 +17,94 @@ namespace EmployeeManagment.Repository
             this.context = context;
         }
 
-        public async Task<User> CreateUser(User user)
+        public async Task<Result<User>> CreateUser(User user)
         {
-           context.Users.Add(user);
-           await context.SaveChangesAsync();
-           return user;
-        }
-
-        public async Task<User?> LoginUser(string username, string password)
-        {
-            var user = await context.Users.Include(u => u.Employee)
-                .FirstOrDefaultAsync(u => u.Username == username);
-
-            if (user == null)
+            try
             {
-                return null;
+                context.Users.Add(user);
+                await context.SaveChangesAsync();
+                return Result<User>.Success(user);
             }
+            catch (Exception e)
+            {
+                return Result<User>.Failure($"Failed to create user : {e.Message}");
+            }
+        }
 
-            var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(password)));
+        public async Task<Result<User?>> LoginUser(string username, string password)
+        {
+            try
+            {
+                var user = await context.Users.Include(u => u.Employee)
+                    .FirstOrDefaultAsync(u => u.Username == username);
 
-            if (hash != user.PasswordHash)
-                return null;
+                if (user == null)
+                {
+                    return Result<User>.Failure("User not found");
+                }
 
-            return user;
+                var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(password)));
+
+                if (hash != user.PasswordHash)
+                    return Result<User>.Failure("Invalid Password");
+
+                return Result<User>.Success(user);
+            }
+            catch (Exception e)
+            {
+                return Result<User?>.Failure($"Failed to login user: {e.Message}");
+            }
         }
 
 
-        public async Task<User?> GetById(string id)
+        public async Task<Result<User?>> GetById(string id)
         {
-            return await context.Users.Include(e => e.Employee).FirstOrDefaultAsync(u => u.Id == id);
+            try
+            {
+                var user =  await context.Users.Include(e => e.Employee).FirstOrDefaultAsync(u => u.Id == id);
+                if (user == null)
+                {
+                    return Result<User>.Failure("User not found");
+                }
+
+                return Result<User>.Success(user);
+            }
+            catch (Exception e)
+            {
+                return Result<User>.Failure($"Failed to retrive user: {e.Message}");
+            }
         }
 
-        public async Task<List<User>> GetActiveUsers()
+        public async Task<Result<List<User>>> GetActiveUsers()
         {
-            return await context.Users.Include(e => e.Employee)
-                .Where(u => u.Employee != null && u.Employee.IsWorking == true)
-                .ToListAsync();
+            try
+            {
+                var user =  await context.Users.Include(e => e.Employee)
+                    .Where(u => u.Employee != null && u.Employee.IsWorking == true)
+                    .ToListAsync();
+                return Result<List<User>>.Success(user);
+            }
+            catch (Exception e)
+            {
+                return Result<List<User>>.Failure($"Failed to retrive active users: {e.Message}");
+            }
         }
 
-        public async Task<bool> UpdatePassword(string id, string newPassword)
+        public async Task<Result> UpdatePassword(string id, string newPassword)
         {
-            var user = await context.Users.FindAsync(id);
-            if(user == null) return false;
-            user.PasswordHash = newPassword;
-            context.Users.Update(user);
-            await context.SaveChangesAsync();
-            return true;
+            try
+            {
+                var user = await context.Users.FindAsync(id);
+                if(user == null) return Result.Failure("User not found");
+                user.PasswordHash = newPassword;
+                context.Users.Update(user);
+                await context.SaveChangesAsync();
+                return Result.Success();
+            }
+            catch (Exception e)
+            {
+                return Result.Failure($"Failed to update password: {e.Message} ");
+            }
         }
     }
 }

@@ -2,27 +2,28 @@
 using EmployeeManagment.Models;
 using EmployeeManagment_MSSQL.Dtos;
 using System.Security.Claims;
+using EmployeeManagment_MSSQL.Exceptions;
 using static Azure.Core.HttpHeader;
 
 namespace EmployeeManagment.Interfaces
 {
     public interface IEmployeeService
     {
-        Task<Employee> CreateEmployee(EmployeeRequest request);
-        Task<IEnumerable<Employee>> GetEmployees();
+        Task<Result<Employee>> CreateEmployee(EmployeeRequest request);
+        Task<Result<IEnumerable<Employee>>> GetEmployees();
 
-        Task<Employee> GetEmployeeById(string id);
-        Task<Employee> UpdateEmployeeBasic(string id, EmployeeRequest request);
-        Task<bool> DeleteEmployee(string id);
+        Task<Result<Employee>> GetEmployeeById(string id);
+        Task<Result<Employee>> UpdateEmployeeBasic(string id, EmployeeRequest request);
+        Task<Result> DeleteEmployee(string id);
 
-        Task<Employee> UpdateAddress(string id, AddressDto address);
-        Task<Employee> UpdateEmploymentHistory(string id, List<EmploymentDto> histories);
+        Task<Result<Employee>> UpdateAddress(string id, AddressDto address);
+        Task<Result<Employee>> UpdateEmploymentHistory(string id, List<EmploymentDto> histories);
 
-        Task<Employee> GetEmployee(ClaimsPrincipal principal);
+        Task<Result<Employee>> GetEmployee(ClaimsPrincipal principal);
 
-        Task<List<EmployeeSummaryDto>> GetAllEmployeesBasic();
+        Task<Result<List<EmployeeSummaryDto>>> GetAllEmployeesBasic();
 
-        Task<(List<EmployeeSummaryDto>, int totalCount)> GetEmployeesPaged(
+        Task<Result<(List<EmployeeSummaryDto>, int totalCount)>> GetEmployeesPaged(
             int totalCount,
             int pageSize = 5,
             string sortBy = "name",

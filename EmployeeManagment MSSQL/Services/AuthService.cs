@@ -5,8 +5,9 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using EmployeeManagment.Models;
+using EmployeeManagment_MSSQL.Exceptions;
 using EmployeeManagment_MSSQL.Interfaces;
-using User = EmployeeManagment.Models.User;
 
 namespace EmployeeManagment.Services
 {
@@ -45,18 +46,36 @@ namespace EmployeeManagment.Services
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        public async Task<User> RegisterUser(UserRegisterRequest request)
+        public async Task<Result<User>> RegisterUser(UserRegisterRequest request)
         {
-            request.Password = HashPassword(request.Password);
-            var newUser = new User
+            try
             {
-                Id = Guid.NewGuid().ToString(),
-                Username = request.Username,
-                PasswordHash = request.Password,
-                Role = request.Role,
-            };
-            var response = await userRepository.CreateUser(newUser);
-            return response;
+                if (string.IsNullOrEmpty(request.Username) || string.IsNullOrEmpty(request.Password))
+                {
+                    return Result<User>.Failure("Username and password are required.");
+                }
+
+                request.Password = HashPassword(request.Password);
+                var newUser = new User
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Username = request.Username,
+                    PasswordHash = request.Password,
+                    Role = request.Role,
+                };
+                var response = await userRepository.CreateUser(newUser);
+                if (!response.IsSuccess)
+                {
+                    return Result<User>.Failure(response.ErrorMessage);
+                }
+
+                return Result<User>.Success(response.Value);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
         }
 
         private string HashPassword(string v)
@@ -64,27 +83,60 @@ namespace EmployeeManagment.Services
             return Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(v)));
         }
 
-        public async Task<string> LoginUser(UserLoginRequest request)
+        public async Task<Result<string>> LoginUser(UserLoginRequest request)
         {
-            var response = await userRepository.LoginUser(request.Username, request.Password);
+            try
+            {
+                if (string.IsNullOrEmpty(request.Username) || string.IsNullOrEmpty(request.Password))
+                {
+                    return Result<string>.Failure("Username and password are required.");
+                }
 
-            if(response == null) return null;
+                var response = await userRepository.LoginUser(request.Username, request.Password);
 
-            var token = CreateToken(response);
-            return token;
+                if (!response.IsSuccess) return Result<string>.Failure(response.ErrorMessage);
+
+                var token = CreateToken(response.Value);
+                return Result<string>.Success(token);
+            }
+            catch (Exception e)
+            {
+                return Result<string>.Failure($"Failed to login user: {e.Message}");
+            }
         }
 
-        public async Task<List<User>> GetAllUsers()
+        public async Task<Result<List<User>>> GetAllUsers()
         {
-           var response = await userRepository.GetActiveUsers();
-           return response;
+            try
+            {
+                var response = await userRepository.GetActiveUsers();
+                if (!response.IsSuccess) return Result<List<User>>.Failure(response.ErrorMessage);
+                return Result<List<User>>.Success(response.Value);
+            }
+            catch (Exception e)
+            {
+                return Result<List<User>>.Failure($"Failed to retrieve active users: {e.Message}");
+            }
         }
 
-        public async Task<bool> UpdatePassword(string id, string password)
+        public async Task<Result> UpdatePassword(string id, string password)
         {
-            var newPassword = HashPassword(password);
-            var response = await userRepository.UpdatePassword(id, newPassword);
-           return response;
+            try
+            {
+                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(password))
+                {
+                    return Result.Failure("User ID and new password are required.");
+                }
+
+                var newPassword = HashPassword(password);
+                var response = await userRepository.UpdatePassword(id, newPassword);
+                if (!response.IsSuccess) return Result.Failure(response.ErrorMessage);
+                return Result.Success();
+            }
+            catch (Exception e)
+            {
+                return Result.Failure($"Failed to update password: {e.Message}");
+            }
         }
     }
 }

@@ -22,31 +22,38 @@ namespace EmployeeManagment.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register(UserRegisterRequest request)
         {
-            var user = await authService.RegisterUser(request);
-            if (user == null)
+            var result = await authService.RegisterUser(request);
+            if (result.IsSuccess)
             {
-                return BadRequest();
+                return Ok(result.Value);
             }
-            return Ok(user);
+
+            return BadRequest(new { Error = result.ErrorMessage });
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login(UserLoginRequest request)
         {
-            var token = await authService.LoginUser(request);
-            if (token == null)
+            var result = await authService.LoginUser(request);
+            if (result.IsSuccess)
             {
-                return BadRequest("Invalid Credentials.");
+                return Ok(new { Token = result.Value });
             }
-            return Ok(new {token});
+
+            return BadRequest(new { Error = result.ErrorMessage });
         }
 
         [HttpGet]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetAllUsers()
         {
-            var users = await authService.GetAllUsers();
-            return Ok(users);
+            var result = await authService.GetAllUsers();
+            if (result.IsSuccess)
+            {
+                return Ok(result.Value);
+            }
+
+            return BadRequest(new { Error = result.ErrorMessage });
         }
 
         [HttpPut]
@@ -54,14 +61,16 @@ namespace EmployeeManagment.Controllers
         public async Task<IActionResult> ChangePassword([FromBody] ChnagePasswordRequest req)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var role = User.FindFirstValue(ClaimTypes.Role);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { Error = "User ID not found in token." });
+            }
+            
 
-            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            var result = await authService.UpdatePassword(userId, req.NewPassword);
+            if (result.IsSuccess) return Ok(new { Message = "Password updated successfully" });
 
-            var success = await authService.UpdatePassword(userId, req.NewPassword);
-            if (!success) return BadRequest("Failed to update password");
-
-            return Ok("Password updated successfully");
+            return BadRequest(new { Error = result.ErrorMessage });
         }
     }
 }
